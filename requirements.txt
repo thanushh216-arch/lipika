@@ -90,7 +90,6 @@ jupyterlab==4.2.5
 jupyterlab_pygments==0.3.0
 jupyterlab_server==2.27.3
 jupyterlab_widgets==3.0.13
-keras==3.13.0
 kiwisolver==1.4.9
 langchain==0.1.10
 langchain-community==0.0.38
@@ -143,6 +142,7 @@ prometheus_client==0.21.0
 prompt_toolkit==3.0.47
 protobuf==5.28.2
 psutil==6.0.0
+psycopg2-binary==2.9.9
 pulsar-client==3.5.0
 pure_eval==0.2.3
 pyarrow==17.0.0
@@ -185,9 +185,7 @@ streamlit==1.38.0
 sympy==1.13.3
 tabulate==0.9.0
 tenacity==8.5.0
-tensorboard==2.20.0
 tensorboard-data-server==0.7.2
-tensorflow==2.20.0
 termcolor==3.3.0
 terminado==0.18.1
 threadpoolctl==3.5.0
