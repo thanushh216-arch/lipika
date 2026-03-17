@@ -152,7 +152,7 @@ def upload_assignment(
             handle_file(file_path),
             api_name="/compare_handwriting"
         )
-        similarity = float(result)
+        similarity = float(result) if not isinstance(result, list) else float(result[0])
     except Exception as e:
         print(f"ML Model Error: {e}")
         similarity = 0.0
