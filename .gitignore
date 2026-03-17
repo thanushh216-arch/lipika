@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.db
+lipika
+.env
+uploads/
+training_data/
