@@ -25,7 +25,7 @@ app = FastAPI(title="Lipika Backend API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Allows Lovable and local testing
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
