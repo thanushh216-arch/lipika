@@ -67,28 +67,25 @@ def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
     return auth.create_user(db, user)
 
 @app.post("/login")
-def login(login_data: schemas.UserLogin, db: Session = Depends(get_db)):
-    # Lovable sends email/password; we verify against Neon
-    db_user = auth.authenticate_user(db, login_data.email, login_data.password)
-
-    if not db_user:
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-
-    access_token = auth.create_access_token(
-        data={"sub": str(db_user.id), "role": db_user.role}
-    )
-
+def login(user_data: schemas.UserLogin, db: Session = Depends(get_db)):
+    user = auth.authenticate_user(db, user_data.email, user_data.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    access_token = auth.create_access_token(data={"sub": str(user.id)})
+    
+    # CRITICAL: You must return the role here so the frontend knows who you are!
     return {
         "access_token": access_token, 
         "token_type": "bearer",
-        "role": db_user.role,
+        "role": user.role,  # <--- Lovable needs this line
         "user": {
-            "id": db_user.id,
-            "name": db_user.name,
-            "email": db_user.email
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "role": user.role
         }
     }
-
 # -----------------------------
 # UTILITIES
 # -----------------------------
