@@ -1,5 +1,9 @@
-from pydantic import BaseModel
-from typing import Optional # <--- Add this import
+from pydantic import BaseModel, ConfigDict
+from typing import Optional
+
+# -----------------------------
+# USER SCHEMAS
+# -----------------------------
 
 class UserCreate(BaseModel):
     name: str
@@ -7,24 +11,29 @@ class UserCreate(BaseModel):
     password: str
     role: str
     
-    # Make these optional so teachers can skip them
+    # Optional fields for Teachers/Admins
     roll_number: Optional[str] = None
     department: Optional[str] = None
     year: Optional[str] = None
 
+    # 🔥 FIX: Tell Pydantic to ignore extra fields from Lovable
+    model_config = ConfigDict(extra="ignore")
+
 class UserLogin(BaseModel):
     email: str
     password: str
+    
+    # Also ignore extra fields here
+    model_config = ConfigDict(extra="ignore")
 
 class UserOut(BaseModel):
     id: int
     name: str
     email: str
     role: str
-    # These can also be optional in the output
-    roll_number: Optional[str]
-    department: Optional[str]
-    year: Optional[str]
+    roll_number: Optional[str] = None
+    department: Optional[str] = None
+    year: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    # Modern Pydantic v2 way to handle SQLAlchemy models
+    model_config = ConfigDict(from_attributes=True)
