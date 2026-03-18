@@ -1,10 +1,9 @@
 import os
 import shutil
 import uuid
-from datetime import timedelta
 from typing import List
 
-from fastapi import FastAPI, Depends, File, UploadFile, HTTPException
+from fastapi import FastAPI, Depends, File, UploadFile, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
@@ -21,30 +20,29 @@ models.Base.metadata.create_all(bind=engine)
 app = FastAPI(title="Lipika Backend API")
 
 # -----------------------------
-# CORS SETTINGS
+# CORS SETTINGS (The Connection Bridge)
 # -----------------------------
-# This allows your frontend (React, Vue, etc.) to communicate with the backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with your frontend URL
+    allow_origins=["*"],  # Allows Lovable and local testing
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # -----------------------------
-# STATIC FILES
+# STATIC FILES SETUP
 # -----------------------------
-# This makes images in these folders viewable in the browser
-# Example: http://127.0.0.1:8000/uploads/your_image.png
-if not os.path.exists("uploads"):
-    os.makedirs("uploads")
-if not os.path.exists("training_data"):
-    os.makedirs("training_data")
+# Creating folders if they don't exist
+UPLOAD_DIR = "uploads"
+TRAIN_DIR = "training_data"
 
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
-app.mount("/training_data", StaticFiles(directory="training_data"), name="training_data")
+for folder in [UPLOAD_DIR, TRAIN_DIR]:
+    if not os.path.exists(folder):
+        os.makedirs(folder)
 
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+app.mount("/training_data", StaticFiles(directory=TRAIN_DIR), name="training_data")
 
 # -----------------------------
 # DATABASE SESSION
@@ -57,28 +55,24 @@ def get_db():
         db.close()
 
 # -----------------------------
-# ROOT API
+# AUTHENTICATION
 # -----------------------------
 @app.get("/")
 def read_root():
-    return {"message": "Lipika Backend is active and running"}
+    return {"message": "Lipika Backend is active and running", "status": "online"}
 
-# -----------------------------
-# AUTHENTICATION
-# -----------------------------
 @app.post("/signup", response_model=schemas.UserOut)
 def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
+    # Ensure role is set; default to student if not provided
     return auth.create_user(db, user)
 
 @app.post("/login")
-def login(
-    login_data: schemas.UserLogin,
-    db: Session = Depends(get_db)
-):
+def login(login_data: schemas.UserLogin, db: Session = Depends(get_db)):
+    # Lovable sends email/password; we verify against Neon
     db_user = auth.authenticate_user(db, login_data.email, login_data.password)
 
     if not db_user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise HTTPException(status_code=401, detail="Invalid email or password")
 
     access_token = auth.create_access_token(
         data={"sub": str(db_user.id), "role": db_user.role}
@@ -87,26 +81,27 @@ def login(
     return {
         "access_token": access_token, 
         "token_type": "bearer",
-        "role": db_user.role
+        "role": db_user.role,
+        "user": {
+            "id": db_user.id,
+            "name": db_user.name,
+            "email": db_user.email
+        }
     }
 
 # -----------------------------
 # UTILITIES
 # -----------------------------
 def get_match_type(score: float):
-    if score >= 75:
+    if score >= 85: # Tightened thresholds for better accuracy
         return "Strong Match"
-    elif score >= 50:
+    elif score >= 60:
         return "Moderate Match"
     return "Weak Match"
 
 def save_upload_file(upload_file: UploadFile, destination_folder: str) -> str:
-    if not os.path.exists(destination_folder):
-        os.makedirs(destination_folder)
-    
     unique_filename = f"{uuid.uuid4()}_{upload_file.filename}"
     file_path = os.path.join(destination_folder, unique_filename)
-
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(upload_file.file, buffer)
     return file_path
@@ -115,36 +110,38 @@ def save_upload_file(upload_file: UploadFile, destination_folder: str) -> str:
 # STUDENT: UPLOAD ASSIGNMENT
 # -----------------------------
 @app.post("/upload-assignment")
-def upload_assignment(
+async def upload_assignment(
     file: UploadFile = File(...),
+    assignment_id: str = Form(None), # Added as optional for Lovable compatibility
     db: Session = Depends(get_db),
     current_user = Depends(require_role("student"))
 ):
-    file_path = save_upload_file(file, "uploads")
+    file_path = save_upload_file(file, UPLOAD_DIR)
 
+    # Check for existing reference
     reference = db.query(models.Assignment).filter(
         models.Assignment.student_id == current_user.id,
         models.Assignment.is_reference == 1
     ).first()
 
+    # If first time, this becomes the master reference
     if reference is None:
-        similarity = 100.0
         new_assignment = models.Assignment(
             student_id=current_user.id,
             image_path=file_path,
             is_reference=1,
             is_training=True,
-            similarity_score=similarity
+            similarity_score=100.0
         )
         db.add(new_assignment)
         db.commit()
-
         return {
-            "message": "Reference handwriting saved successfully.",
-            "similarity_score": similarity,
+            "message": "First submission: Reference handwriting saved.",
+            "similarity_score": 100.0,
             "match_type": "Reference"
         }
 
+    # Compare against reference using Hugging Face
     try:
         client = Client("thanoxz/ml-api")
         result = client.predict(
@@ -154,7 +151,7 @@ def upload_assignment(
         )
         similarity = float(result) if not isinstance(result, list) else float(result[0])
     except Exception as e:
-        print(f"ML Model Error: {e}")
+        print(f"ML API Error: {e}")
         similarity = 0.0
 
     new_assignment = models.Assignment(
@@ -169,7 +166,7 @@ def upload_assignment(
     db.commit()
 
     return {
-        "message": "Assignment verified against reference.",
+        "message": "Handwriting verification complete",
         "similarity_score": similarity,
         "match_type": get_match_type(similarity)
     }
@@ -182,45 +179,28 @@ def get_assignments(
     db: Session = Depends(get_db),
     current_user = Depends(require_role("teacher"))
 ):
+    # Join assignments with user data to show names in the dashboard
     query_result = db.query(models.Assignment, models.User).join(
         models.User, models.Assignment.student_id == models.User.id
     ).filter(models.Assignment.is_reference == 0).all()
 
-    stats = {"Strong Match": 0, "Moderate Match": 0, "Weak Match": 0}
     data_list = []
-
     for assignment, student in query_result:
-        m_type = get_match_type(assignment.similarity_score)
-        stats[m_type] += 1
-        
         data_list.append({
-            "student_id": assignment.student_id,
+            "id": assignment.id,
             "student_name": student.name,
             "roll_number": student.roll_number,
-            "similarity": assignment.similarity_score,
-            "match_type": m_type,
-            "date": assignment.created_at,
-            "image_url": f"/{assignment.image_path}" # Added leading slash for frontend routing
+            "similarity": round(assignment.similarity_score, 2),
+            "match_type": get_match_type(assignment.similarity_score),
+            "date": assignment.created_at.strftime("%Y-%m-%d %H:%M"),
+            "image_url": f"https://thxanozz.onrender.com/{assignment.image_path}" # Full URL for Lovable
         })
 
-    return {
-        "total": len(query_result),
-        "summary": stats,
-        "data": data_list
-    }
+    return {"data": data_list}
 
 # -----------------------------
-# ADMIN: MANAGE STUDENTS & DATA
+# ADMIN: UPLOAD TRAINING DATA
 # -----------------------------
-
-@app.get("/admin/students", response_model=List[schemas.UserOut])
-def list_students(
-    db: Session = Depends(get_db),
-    current_user = Depends(require_role("admin"))
-):
-    students = db.query(models.User).filter(models.User.role == "student").all()
-    return students
-
 @app.post("/admin/upload-training-by-roll/{roll_number}")
 def upload_training_by_roll(
     roll_number: str,
@@ -234,21 +214,13 @@ def upload_training_by_roll(
     ).first()
 
     if not student:
-        raise HTTPException(
-            status_code=404, 
-            detail=f"Student with Roll Number '{roll_number}' not found."
-        )
+        raise HTTPException(status_code=404, detail="Student roll number not found")
 
-    student_id = student.id
-    folder = os.path.join("training_data", f"student_{student_id}")
-    
-    try:
-        file_path = save_upload_file(file, folder)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"File save error: {str(e)}")
+    folder = os.path.join(TRAIN_DIR, f"student_{student.id}")
+    file_path = save_upload_file(file, folder)
 
     new_training = models.Assignment(
-        student_id=student_id,
+        student_id=student.id,
         image_path=file_path,
         is_reference=0,
         is_training=True,
@@ -257,12 +229,5 @@ def upload_training_by_roll(
     
     db.add(new_training)
     db.commit()
-    db.refresh(new_training)
 
-    return {
-        "status": "success",
-        "message": f"Training data uploaded for {student.name}",
-        "roll_number": student.roll_number,
-        "file_id": new_training.id,
-        "saved_path": f"/{file_path}"
-    }
+    return {"message": f"Training data added for {student.name}", "path": file_path}
