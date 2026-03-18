@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta
+import os
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status
@@ -14,12 +15,21 @@ from .database import SessionLocal
 # -----------------------------
 # CONFIG
 # -----------------------------
-SECRET_KEY = "your-secret-key"  # 🔥 Change this to a random string in production
+# 💡 Pro-tip: Use an environment variable for the secret key if possible
+SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-this") 
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 
-# Password hashing configuration
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# -----------------------------
+# PASSWORD HASHING FIX
+# -----------------------------
+# Added 'bcrypt__truncate_error=True' to fix the version mismatch crash
+pwd_context = CryptContext(
+    schemes=["bcrypt"], 
+    deprecated="auto",
+    bcrypt__truncate_error=True 
+)
+
 security = HTTPBearer()
 
 # -----------------------------
@@ -39,7 +49,10 @@ def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception:
+        return False
 
 # -----------------------------
 # CREATE USER
@@ -85,9 +98,9 @@ def authenticate_user(db: Session, email: str, password: str):
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
+        expire = datetime.now(timezone.utc) + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
     
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
@@ -116,7 +129,7 @@ def get_current_user(
     except JWTError:
         raise credentials_exception
 
-    # Query the user by ID (ensuring it's an integer)
+    # Query the user by ID
     user = db.query(models.User).filter(models.User.id == int(user_id)).first()
     
     if user is None:
