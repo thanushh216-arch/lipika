@@ -5,26 +5,21 @@ from typing import Optional
 # USER SCHEMAS
 # -----------------------------
 
+from pydantic import BaseModel, EmailStr
+from typing import Optional
+
 class UserCreate(BaseModel):
     name: str
-    email: str
+    username: str      # This can be their email or a unique ID
+    roll_number: str
     password: str
-    role: str
-    
-    # Optional fields for Teachers/Admins
-    roll_number: Optional[str] = None
-    department: Optional[str] = None
-    year: Optional[str] = None
-
-    # 🔥 FIX: Tell Pydantic to ignore extra fields from Lovable
-    model_config = ConfigDict(extra="ignore")
+    dept: str          # Department
+    role: str          # 'student', 'teacher', or 'admin'
 
 class UserLogin(BaseModel):
-    email: str
+    username: str
     password: str
-    
-    # Also ignore extra fields here
-    model_config = ConfigDict(extra="ignore")
+    role: str          # Added as per your plan
 
 class UserOut(BaseModel):
     id: int

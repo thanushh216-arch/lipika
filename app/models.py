@@ -18,19 +18,25 @@ class User(Base):
     year = Column(String)
 
 
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text
+from sqlalchemy.orm import relationship
+from .database import Base
+from datetime import datetime
+
 class Assignment(Base):
-
     __tablename__ = "assignments"
-    is_training = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
     id = Column(Integer, primary_key=True, index=True)
-    student_id = Column(Integer)
-
+    student_id = Column(Integer, ForeignKey("users.id"))
     image_path = Column(String)
+    is_reference = Column(Integer, default=0)
+    is_training = Column(Boolean, default=False)
+    
+    # Add these to match your Neon changes:
+    status = Column(String, default="pending")
+    similarity_score = Column(Float, default=0.0)
+    feedback = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    # ------------------------------
 
-    is_reference = Column(Integer)
-
-    similarity_score = Column(Float)
-
-    submission_date = Column(DateTime, default=datetime.utcnow)
+    # Relationship to the User model (if you have one)
+    student = relationship("User", back_populates="assignments")

@@ -68,23 +68,27 @@ def signup(user: schemas.UserCreate, db: Session = Depends(get_db)):
 
 @app.post("/login")
 def login(user_data: schemas.UserLogin, db: Session = Depends(get_db)):
-    user = auth.authenticate_user(db, user_data.email, user_data.password)
+    # We now pass user_data.role here
+    user = auth.authenticate_user(
+        db, 
+        user_data.username, 
+        user_data.password, 
+        user_data.role
+    )
+    
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise HTTPException(
+            status_code=401, 
+            detail="Invalid credentials or incorrect role selected"
+        )
     
-    access_token = auth.create_access_token(data={"sub": str(user.id)})
+    token = auth.create_access_token(data={"sub": str(user.id)})
     
-    # CRITICAL: You must return the role here so the frontend knows who you are!
     return {
-        "access_token": access_token, 
+        "access_token": token,
         "token_type": "bearer",
-        "role": user.role,  # <--- Lovable needs this line
-        "user": {
-            "id": user.id,
-            "name": user.name,
-            "email": user.email,
-            "role": user.role
-        }
+        "role": user.role,
+        "user_id": user.id
     }
 # -----------------------------
 # UTILITIES
@@ -194,6 +198,27 @@ def get_assignments(
         })
 
     return {"data": data_list}
+
+    assignment = db.query(models.Assignment).filter(models.Assignment.id == assignment_id).first()
+    
+    if not assignment:
+        raise HTTPException(status_code=404, detail="Assignment not found")
+    
+    # 2. Update the fields based on what the teacher sent from Lovable
+    if "status" in review_data:
+        assignment.status = review_data["status"]
+    
+    if "feedback" in review_data:
+        assignment.feedback = review_data["feedback"]
+    
+    # 3. Save changes to Neon
+    db.commit()
+    db.refresh(assignment)
+    
+    return {
+        "status": "success", 
+        "message": f"Assignment {assignment_id} is now {assignment.status}"
+    }
 
 # -----------------------------
 # ADMIN: UPLOAD TRAINING DATA

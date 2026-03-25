@@ -17,9 +17,10 @@ if DATABASE_URL.startswith("sqlite"):
 
 # 4. Create the engine with the dynamic arguments
 engine = create_engine(
-    DATABASE_URL, 
-    connect_args=connect_args
+    SQLALCHEMY_DATABASE_URL,
+    pool_pre_ping=True,   # 👈 This checks if the connection is alive
+    pool_recycle=300,     # 👈 This refreshes the connection every 5 minutes
+    connect_args={"sslmode": "require"} # 👈 Ensures SSL is always active
 )
-
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()

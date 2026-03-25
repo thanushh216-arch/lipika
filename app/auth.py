@@ -86,9 +86,16 @@ def create_user(db: Session, user: schemas.UserCreate):
 # -----------------------------
 # AUTHENTICATE USER
 # -----------------------------
-def authenticate_user(db: Session, email: str, password: str):
-    user = db.query(models.User).filter(models.User.email == email).first()
-    if not user or not verify_password(password, user.password):
+def authenticate_user(db: Session, username: str, password: str, role: str):
+    # Search for a user where (email OR roll_number) matches AND the role matches
+    user = db.query(models.User).filter(
+        ((models.User.email == username) | (models.User.roll_number == username)),
+        (models.User.role == role)
+    ).first()
+    
+    if not user:
+        return None
+    if not verify_password(password, user.password):
         return None
     return user
 
