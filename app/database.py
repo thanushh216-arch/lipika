@@ -3,17 +3,17 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# 1. GET THE URL FROM RENDER ENVIRONMENT VARIABLES
-# This matches the "DATABASE_URL" you set in Render's dashboard
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
+# 1. Define the variable FIRST
+# This pulls the 'DATABASE_URL' you set in Render's Environment Variables
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-# 2. FIX FOR POSTGRES DIALECT (Render/Neon specific)
-# Neon URLs start with 'postgres://', but SQLAlchemy 2.0 needs 'postgresql://'
-if SQLALCHEMY_DATABASE_URL and SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
-    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
+# 2. Fix for SQLAlchemy 2.0 (converts postgres:// to postgresql://)
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    SQLALCHEMY_DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+else:
+    SQLALCHEMY_DATABASE_URL = DATABASE_URL
 
-# 3. CREATE THE ENGINE
-# (Make sure SQLALCHEMY_DATABASE_URL is passed inside here)
+# 3. Now use it in create_engine
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
     pool_pre_ping=True,
