@@ -13,7 +13,7 @@ class UserCreate(BaseModel):
     username: str      # This can be their email or a unique ID
     roll_number: str
     password: str
-    dept: str          # Department
+    department: str          # Department
     role: str          # 'student', 'teacher', or 'admin'
 
 class UserLogin(BaseModel):
