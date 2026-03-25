@@ -1,26 +1,25 @@
 import os
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
-# 1. Get URL from environment (Render/Neon) or fallback to local SQLite
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./lipika.db")
+# 1. GET THE URL FROM RENDER ENVIRONMENT VARIABLES
+# This matches the "DATABASE_URL" you set in Render's dashboard
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
 
-# 2. Fix for PostgreSQL URL format (SQLAlchemy requires 'postgresql://')
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+# 2. FIX FOR POSTGRES DIALECT (Render/Neon specific)
+# Neon URLs start with 'postgres://', but SQLAlchemy 2.0 needs 'postgresql://'
+if SQLALCHEMY_DATABASE_URL and SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
+    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-# 3. Handle specific arguments for SQLite vs PostgreSQL
-# SQLite needs 'check_same_thread: False', but PostgreSQL will crash if it sees it.
-connect_args = {}
-if DATABASE_URL.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
-
-# 4. Create the engine with the dynamic arguments
+# 3. CREATE THE ENGINE
+# (Make sure SQLALCHEMY_DATABASE_URL is passed inside here)
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
-    pool_pre_ping=True,   # 👈 This checks if the connection is alive
-    pool_recycle=300,     # 👈 This refreshes the connection every 5 minutes
-    connect_args={"sslmode": "require"} # 👈 Ensures SSL is always active
+    pool_pre_ping=True,
+    pool_recycle=300,
+    connect_args={"sslmode": "require"}
 )
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
