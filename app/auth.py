@@ -59,7 +59,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 # -----------------------------
 def create_user(db: Session, user: schemas.UserCreate):
     # Check if user already exists
-    existing_user = db.query(models.User).filter(models.User.email == user.email).first()
+    existing_user = db.query(models.User).filter(models.User.username == user.username).first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
